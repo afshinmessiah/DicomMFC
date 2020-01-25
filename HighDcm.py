@@ -38,7 +38,7 @@ def HighDicomMultiFrameConvertor(SingleFrameDir, OutputPrefix):
     n = 0
     success = True
     for ModalityName, ModalityDatasets in ModalityCategory.items():
-        if ModalityName != 'CT' or ModalityName != 'MR' or ModalityName != 'PET':
+        if ModalityName != 'CT' and ModalityName != 'MR' and ModalityName != 'PET':
             continue
         Modality_Studies = GetStudyCategory(ModalityDatasets)
         Modality_Studies_Items = Modality_Studies.items();
@@ -58,7 +58,7 @@ def HighDicomMultiFrameConvertor(SingleFrameDir, OutputPrefix):
                              dataset=ModalityConvertorObj, write_like_original=True)
                     print("File " + id + " was successfully written ...")
                 except:
-                    print("File " + id + " sth went wrong ...")
+                    print(" sth went wrong ...")
                     success = False
                     pass
     return success
