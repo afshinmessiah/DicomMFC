@@ -81,8 +81,8 @@ class OutInfo:
 def write_report(seq_, excel_file):
     Fields = {'Input Folder': 0, 'Input File Count': 1,
               'PM Output Folder': 2, 'PM Output File Count': 3,
-              'PM Success': 4, 'PM Verification': 5,'HD Output Folder': 6, 'HD Output File Count': 7,
-              'HD Success': 8, 'HD Verification':9}
+              'PM Success': 4, 'PM Verification': 5, 'HD Output Folder': 6, 'HD Output File Count': 7,
+              'HD Success': 8, 'HD Verification': 9}
 
     workbook = xlsxwriter.Workbook(excel_file)
     worksheet = workbook.add_worksheet()
@@ -104,8 +104,6 @@ def write_report(seq_, excel_file):
         worksheet.write_string(r, Fields['HD Verification'], obj.HighDicomVerification)
 
     workbook.close()
-
-
 
 
 # =========================================================================
@@ -136,13 +134,13 @@ files = []
 # for filename in files:
 #     print(filename)
 start_dir = "E:\\Dropbox\\IDC-MF_DICOM\\data"
-# start_dir = "E:\\Dropbox\\IDC-MF_DICOM\\data\\TCGA-UCEC\\TCGA-D1-A2G5\\09-17-1989-Pelvis01PelvisRoutine Adult-16026"
+start_dir = "E:\\Dropbox\\IDC-MF_DICOM\\data\\TCGA-UCEC\\TCGA-D1-A2G5\\09-17-1989-Pelvis01PelvisRoutine Adult-16026"
 JavaPath = "D:\\ThirdParty\\Java\\jdk-13.0.1\\bin\\java.exe"
-save_dir = "E:\\Dropbox\\IDC-MF_DICOM\\output003"
+save_dir = "E:\\Dropbox\\IDC-MF_DICOM\\output001"
 pixelmed_exe = "E:\\work\\pixelmedjavadicom_binaryrelease.20191218"
 pixelmed_lib = "E:\\work\\pixelmedjavadicom_dependencyrelease.20191218\\lib"
 dcm_verify = "D:\\ThirdParty\\dicom3tools\\dicom3tools_winexe_1.00.snapshot.20191225060430\\dciodvfy.exe"
-Excel_report=os.path.join(save_dir,"Report.xlsx")
+Excel_report = os.path.join(save_dir, "Report.xlsx")
 # p=Path(save_dir)
 # p.unlink()
 if os.path.exists(save_dir):
@@ -154,29 +152,28 @@ for folder_name in folders:
     print(folder_name)
     info = OutInfo()
 
-    pixelmed_output_folder = (folder_name.replace(start_dir, os.path.join(save_dir,"PixelMed")))
+    pixelmed_output_folder = (folder_name.replace(start_dir, os.path.join(save_dir, "PixelMed")))
     # pixelmed_output_folder=save_dir+"\\test00"
     if not os.path.exists(pixelmed_output_folder):
         os.makedirs(pixelmed_output_folder)
     save_file_name = os.path.basename(pixelmed_output_folder);
     pathpath = Path(pixelmed_output_folder);
     output_parent = pathpath.parent;
-    output_error_file =  pixelmed_output_folder + "_PixelMedError.txt";
-    output_stream_file =  pixelmed_output_folder + "_PixelMedOut.txt";
+    output_error_file = pixelmed_output_folder + "_PixelMedError.txt";
+    output_stream_file = pixelmed_output_folder + "_PixelMedOut.txt";
 
     if not os.path.exists(pixelmed_output_folder):
         os.makedirs(pixelmed_output_folder)
 
-    command = [JavaPath, "-Xmx768m", "-Xms768m","-cp", os.path.join(pixelmed_exe, "pixelmed.jar;")+\
+    command = [JavaPath, "-Xmx768m", "-Xms768m", "-cp", os.path.join(pixelmed_exe, "pixelmed.jar;") + \
                os.path.join(pixelmed_lib, "additional\\vecmath1.2-1.14.jar"),
                "com.pixelmed.dicom.MultiFrameImageFactory", folder_name, pixelmed_output_folder]
-
 
     files = os.listdir(folder_name)
     info.Input.Dir = folder_name
     info.Input.FileCount = len(files)
 
-    exit_code =run_exe(command, output_error_file,output_stream_file)
+    exit_code = run_exe(command, output_error_file, output_stream_file)
     if exit_code == 0:
         info.PixelMedSuccess = True;
     else:
@@ -199,14 +196,12 @@ for folder_name in folders:
                 os.remove(final_file_name)
             os.rename(full_f, final_file_name)
 
-
             vr = run_exe([dcm_verify, '-v', final_file_name], final_file_base + "_ver_error.txt"
                          , final_file_base + "_ver_output.txt")
             if vr == 0:
                 info.PixelMedVerification += "1"
             else:
                 info.PixelMedVerification += "0"
-
 
             i += 1
     while 1:
@@ -217,23 +212,23 @@ for folder_name in folders:
             time.sleep(5)
         else:
             break;
-    #---------------------------------------------------------
+    # ---------------------------------------------------------
     highdicom_output_folder = (folder_name.replace(start_dir, os.path.join(save_dir, "HighDcm")))
-    highdicom_output_folder_parent=Path(highdicom_output_folder).parent
+    highdicom_output_folder_parent = Path(highdicom_output_folder).parent
     if not os.path.exists(highdicom_output_folder_parent):
         os.makedirs(highdicom_output_folder_parent)
-    hd_success=HighDicomMultiFrameConvertor(folder_name,highdicom_output_folder)
+    hd_success = HighDicomMultiFrameConvertor(folder_name, highdicom_output_folder)
     info.HighDicomOutput.Dir = highdicom_output_folder;
-    hd_out_files=os.listdir(highdicom_output_folder_parent);
-    info.HighDicomOutput.FileCount=len(hd_out_files)
-    info.HighDicomSuccess=hd_success
+    hd_out_files = os.listdir(highdicom_output_folder_parent);
+    info.HighDicomOutput.FileCount = len(hd_out_files)
+    info.HighDicomSuccess = hd_success
     for hd_out_file in hd_out_files:
-        hd_out_file_base=os.path.basename(highdicom_output_folder)
-        vr = run_exe([dcm_verify, '-v', os.path.join(highdicom_output_folder_parent,hd_out_file)]
-                     , hd_out_file_base + "_ver_error.txt"
-                     , hd_out_file_base + "_ver_output.txt")
-        if vr :
-            info.HighDicomVerification+='0'
+        hd_out_file_base = os.path.basename(highdicom_output_folder)
+        vr = run_exe([dcm_verify, '-v', os.path.join(highdicom_output_folder_parent, hd_out_file)]
+                     , os.path.join(highdicom_output_folder_parent, hd_out_file_base + "_ver_error.txt")
+                     , os.path.join(highdicom_output_folder_parent, hd_out_file_base + "_ver_output.txt"))
+        if vr:
+            info.HighDicomVerification += '0'
         else:
             info.HighDicomVerification += '1'
 

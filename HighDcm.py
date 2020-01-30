@@ -54,6 +54,10 @@ def HighDicomMultiFrameConvertor(SingleFrameDir, OutputPrefix):
                                                                   instance_number=sris_ds[0].InstanceNumber)
                     id = "_%02d_.dcm" % n
                     FileName = os.path.join(OutputPrefix, ModalityName+id)
+                    folder = os.path.dirname(FileName)
+                    if not os.path.exists(folder):
+                        os.makedirs(folder)
+
                     dcmwrite(filename=FileName,
                              dataset=ModalityConvertorObj, write_like_original=True)
                     print("File " + id + " was successfully written ...")
