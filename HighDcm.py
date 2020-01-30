@@ -1,7 +1,8 @@
-import os
+import os, sys, argparse
 
 from pydicom.filereader import dcmread
 from pydicom.filewriter import dcmwrite
+from pydicom.errors import InvalidDicomError
 
 from highdicom.legacy import sop
 
@@ -30,7 +31,10 @@ def HighDicomMultiFrameConvertor(SingleFrameDir, OutputPrefix):
     ModalityCategory = {}
     Files = os.listdir(SingleFrameDir)
     for f in Files:
-        ds = dcmread(os.path.join(SingleFrameDir, f));
+        try:
+          ds = dcmread(os.path.join(SingleFrameDir, f));
+        except InvalidDicomError:
+          continue
         if ds.Modality in ModalityCategory:
             ModalityCategory[ds.Modality].append(ds);
         else:
@@ -62,3 +66,16 @@ def HighDicomMultiFrameConvertor(SingleFrameDir, OutputPrefix):
                     success = False
                     pass
     return success
+
+def main(argv):
+    parser = argparse.ArgumentParser(description="highdicom MF conversion wrapper. Specify input directory (-i) and output directory (-o).")
+    parser.add_argument("-i", "--input-folder", dest="input_folder", metavar="PATH",
+                        default="-", required=True, help="Folder of input DICOM files (can contain sub-folders)")
+    parser.add_argument("-o", "--output-prefix", dest="output_prefix", metavar="PATH",
+                        default=".", required=True, help="File prefix to save converted datasets")
+    args = parser.parse_args(argv)
+
+    HighDicomMultiFrameConvertor(args.input_folder, args.output_prefix)
+
+if __name__ == "__main__":
+  main(sys.argv[1:])
