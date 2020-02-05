@@ -25,7 +25,14 @@ def GetSeriesCategory(ds_list):
         else:
             series[ds.SeriesInstanceUID] = [ds];
     return series
-
+def GetSOPCategory(ds_list):
+    series = {}
+    for ds in ds_list:
+        if (ds.SOPInstanceUID in series):
+            series[ds.SOPInstanceUID].append(ds);
+        else:
+            series[ds.SOPInstanceUID] = [ds];
+    return series
 
 def HighDicomMultiFrameConvertor(SingleFrameDir, OutputPrefix):
     ModalityCategory = {}
@@ -45,17 +52,25 @@ def HighDicomMultiFrameConvertor(SingleFrameDir, OutputPrefix):
         if ModalityName != 'CT' and ModalityName != 'MR' and ModalityName != 'PET':
             continue
         Modality_Studies = GetStudyCategory(ModalityDatasets)
-        Modality_Studies_Items = Modality_Studies.items();
+        Modality_Studies_Items = Modality_Studies.items()
         for stdy_UID, stdy_ds in Modality_Studies_Items:
-            Modality_Series = GetSeriesCategory(stdy_ds).items();
-            for sris_UID, sris_ds in Modality_Series:
+            Modality_Series = GetSeriesCategory(stdy_ds)
+            Modality_Series_Items = GetSeriesCategory(stdy_ds).items()
+            for sris_UID, sris_ds in Modality_Series_Items:
                 ModalityConvertorClass = getattr(sop, "LegacyConvertedEnhanced" + ModalityName + "Image")
+                sops=GetSOPCategory(sris_ds)
+                sorted_ds=[]
+                for sorted_key in sorted(sops.items(),key=lambda x: x[1][0].InstanceNumber):
+                    sorted_ds.append(sorted_key[1][0])
+                    print("{}---->{}".format(sorted_key[0],sorted_key[1][0].InstanceNumber))
+                    print("AccessionNumb---->{}".format( sorted_key[1][0].AccessionNumber))
+
                 try:
-                    ModalityConvertorObj = ModalityConvertorClass(legacy_datasets=sris_ds,
+                    ModalityConvertorObj = ModalityConvertorClass(legacy_datasets=sorted_ds,
                                                                   series_instance_uid=sris_UID,
-                                                                  series_number=sris_ds[0].SeriesNumber,
-                                                                  sop_instance_uid=sris_ds[0].SOPInstanceUID,
-                                                                  instance_number=sris_ds[0].InstanceNumber)
+                                                                  series_number=sorted_ds[0].SeriesNumber,
+                                                                  sop_instance_uid=sorted_ds[0].SOPInstanceUID,
+                                                                  instance_number=sorted_ds[0].InstanceNumber)
                     id = "_%02d_.dcm" % n
                     FileName = os.path.join(OutputPrefix, ModalityName+id)
                     folder = os.path.dirname(FileName)

@@ -136,7 +136,7 @@ files = []
 start_dir = "E:\\Dropbox\\IDC-MF_DICOM\\data"
 start_dir = "E:\\Dropbox\\IDC-MF_DICOM\\data\\TCGA-UCEC\\TCGA-D1-A2G5\\09-17-1989-Pelvis01PelvisRoutine Adult-16026"
 JavaPath = "D:\\ThirdParty\\Java\\jdk-13.0.1\\bin\\java.exe"
-save_dir = "E:\\Dropbox\\IDC-MF_DICOM\\output001"
+save_dir = "E:\\Dropbox\\IDC-MF_DICOM\\output01"
 pixelmed_exe = "E:\\work\\pixelmedjavadicom_binaryrelease.20191218"
 pixelmed_lib = "E:\\work\\pixelmedjavadicom_dependencyrelease.20191218\\lib"
 dcm_verify = "D:\\ThirdParty\\dicom3tools\\dicom3tools_winexe_1.00.snapshot.20191225060430\\dciodvfy.exe"
@@ -219,18 +219,22 @@ for folder_name in folders:
         os.makedirs(highdicom_output_folder_parent)
     hd_success = HighDicomMultiFrameConvertor(folder_name, highdicom_output_folder)
     info.HighDicomOutput.Dir = highdicom_output_folder;
-    hd_out_files = os.listdir(highdicom_output_folder_parent);
-    info.HighDicomOutput.FileCount = len(hd_out_files)
+    hd_out_files = os.listdir(highdicom_output_folder)
+    hd_dcm_files=[]
+    for ffiles in hd_out_files:
+        if ffiles.endswith(".dcm"):
+            hd_dcm_files.append(ffiles)
+    info.HighDicomOutput.FileCount = len(hd_dcm_files)
     info.HighDicomSuccess = hd_success
-    for hd_out_file in hd_out_files:
-        hd_out_file_base = os.path.basename(highdicom_output_folder)
-        vr = run_exe([dcm_verify, '-v', os.path.join(highdicom_output_folder_parent, hd_out_file)]
-                     , os.path.join(highdicom_output_folder_parent, hd_out_file_base + "_ver_error.txt")
-                     , os.path.join(highdicom_output_folder_parent, hd_out_file_base + "_ver_output.txt"))
-        if vr:
-            info.HighDicomVerification += '0'
-        else:
+    for hd_dcm_file in hd_dcm_files:
+        hd_out_file_base = os.path.basename(hd_dcm_file)
+        vr = run_exe([dcm_verify, '-v', os.path.join(highdicom_output_folder, hd_dcm_file)]
+                     , os.path.join(highdicom_output_folder, hd_out_file_base + "_ver_error.txt")
+                     , os.path.join(highdicom_output_folder, hd_out_file_base + "_ver_output.txt"))
+        if vr == 0:
             info.HighDicomVerification += '1'
+        else:
+            info.HighDicomVerification += '0'
 
     OutputReport.append(info)
     write_report(OutputReport, Excel_report)
