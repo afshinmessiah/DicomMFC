@@ -28,17 +28,19 @@ class PositionBaseCategoryElement:
             self.DicomDataset.append(new_touple)
         return success
 
-
-    def __init__(self, step: float, ds_pos_elem1:tuple):
+    def __init__(self, step: float, ds_pos_elem1: tuple):
         self.StepSize = step
         self.DicomDataset = [ds_pos_elem1]
 
-    def Print(self):
-        print("========================================================")
-        print("step size = {}".format(self.StepSize))
-        print("========================================================")
+    def Print(self,Indent=0):
+        Prefix=""
+        for i in range(0,Indent):
+            Prefix += "\t"
+        print(Prefix +"========================================================")
+        print(Prefix +"step size = {}".format(self.StepSize))
+        print(Prefix +"========================================================")
         for el in self.DicomDataset:
-            print("---> position {}".format( el[1]))
+            print(Prefix +"---> position {}".format(el[1]))
 
 
 def GetStudyCategory(ds_list):
@@ -106,7 +108,7 @@ def GetVectorDistance(vec1, vec2):
     return numpy.sqrt(dist)
 
 
-def GetImagePosition(ds):
+def GetSlicePosition(ds):
     dirr = ds.ImageOrientationPatient
 
     poss = ds.ImagePositionPatient
@@ -123,22 +125,21 @@ def ClassifySeriesByPosition(ds_list):
     counter = 0
 
     for ds_element in ds_list:
-        ds_pairs.append((ds_element, GetImagePosition(ds_element)))
+        ds_pairs.append((ds_element, GetSlicePosition(ds_element)))
     if len(ds_list) == 1:
         return [PositionBaseCategoryElement(1, ds_pairs[0])]
 
     for sorted_key in sorted(ds_pairs, key=lambda x: x[1]):
         sorted_ds.append(sorted_key)
 
-    category = [PositionBaseCategoryElement( sorted_ds[1][1]-sorted_ds[0][1],sorted_ds[0])]
+    category = [PositionBaseCategoryElement(sorted_ds[1][1] - sorted_ds[0][1], sorted_ds[0])]
     for (ds, idx) in zip(sorted_ds[1:], range(1, len(sorted_ds))):
         if not category[-1].AddNewCandidate(ds):
             if idx == len(sorted_ds) - 1:
                 category.append(PositionBaseCategoryElement(1, ds))
             else:
-                category.append(PositionBaseCategoryElement(sorted_ds[idx+1][1]-ds[1],ds))
-    for el in category:
-        el.Print()
+                category.append(PositionBaseCategoryElement(sorted_ds[idx + 1][1] - ds[1], ds))
+
     return category
 
 
@@ -155,7 +156,7 @@ def HighDicomMultiFrameConvertor(SingleFrameDir, OutputPrefix):
         else:
             ModalityCategory[ds.Modality] = [ds];
     n = 0
-    Output=[]
+    Output = []
     success = True
     for ModalityName, ModalityDatasets in ModalityCategory.items():
         if ModalityName != 'CT' and ModalityName != 'MR' and ModalityName != 'PET':
@@ -171,17 +172,32 @@ def HighDicomMultiFrameConvertor(SingleFrameDir, OutputPrefix):
                         equally_positioned_classes = ClassifySeriesByPosition(orientation_element[1])
                         for uniform_class in equally_positioned_classes:
                             final_ds = []
+
+                            ModalityConvertorClass = getattr(sop, "LegacyConvertedEnhanced" + ModalityName + "Image")
+                            print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+                            print("Distinguish Series ({}):\n\t\tSourceStudyUID:".format(n, stdy_UID) +
+                                  "\n\t\tSourceSeriesUID {}\n\t\tPixelSpacing = [{}\t{}\t{}]".
+                                  format(sris_UID, spacing_element[0][0], spacing_element[0][1],
+                                         spacing_element[0][2]) +
+                                  "\n\t\tImageOrientation = \n\t\t\t\t\trow_vector=[{}\t{}\t{}]\n\t\t\t\t\tcol_vector=[{}\t{}\t{}]".
+                                  format(orientation_element[0][0], orientation_element[0][1],
+                                         orientation_element[0][2],
+                                         orientation_element[0][3], orientation_element[0][4],
+                                         orientation_element[0][5]))
+
                             for dds in uniform_class.DicomDataset:
                                 final_ds.append(dds[0])
-                            ModalityConvertorClass = getattr(sop, "LegacyConvertedEnhanced" + ModalityName + "Image")
+                            uniform_class.Print(3)
 
                             try:
+
 
                                 ModalityConvertorObj = ModalityConvertorClass(legacy_datasets=final_ds,
                                                                               series_instance_uid=generate_uid(),
                                                                               series_number=final_ds[0].SeriesNumber,
                                                                               sop_instance_uid=generate_uid(),
-                                                                              instance_number=final_ds[0].InstanceNumber)
+                                                                              instance_number=final_ds[
+                                                                                  0].InstanceNumber)
                                 id = "_%02d_.dcm" % n
                                 FileName = os.path.join(OutputPrefix, ModalityName + id)
                                 folder = os.path.dirname(FileName)
@@ -191,7 +207,7 @@ def HighDicomMultiFrameConvertor(SingleFrameDir, OutputPrefix):
                                 dcmwrite(filename=FileName,
                                          dataset=ModalityConvertorObj, write_like_original=True)
                                 print("File " + FileName + " was successfully written ...")
-                                n =+1
+                                n = +1
                             except:
                                 print(" sth went wrong ...")
                                 success = False
