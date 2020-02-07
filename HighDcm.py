@@ -1,10 +1,44 @@
 import os, sys, argparse
-
+import numpy
+from pydicom.uid import generate_uid
 from pydicom.filereader import dcmread
 from pydicom.filewriter import dcmwrite
 from pydicom.errors import InvalidDicomError
 
 from highdicom.legacy import sop
+
+floating_point_tolerance = 0.00001
+
+
+class PositionBaseCategoryElement:
+    StepSize = 0
+    DicomDataset = []
+
+    def AddNewCandidate(self, new_touple):
+        success = False
+        new_pos = new_touple[1]
+
+        if abs(self.DicomDataset[0][1] - new_pos - self.StepSize) < floating_point_tolerance and \
+                new_pos < self.DicomDataset[0][1]:
+            success = True
+            self.DicomDataset.insert(0, new_touple)
+        elif abs(new_pos - self.DicomDataset[-1][1] - self.StepSize) < floating_point_tolerance and \
+                new_pos > self.DicomDataset[-1][1]:
+            success = True
+            self.DicomDataset.append(new_touple)
+        return success
+
+
+    def __init__(self, step: float, ds_pos_elem1:tuple):
+        self.StepSize = step
+        self.DicomDataset = [ds_pos_elem1]
+
+    def Print(self):
+        print("========================================================")
+        print("step size = {}".format(self.StepSize))
+        print("========================================================")
+        for el in self.DicomDataset:
+            print("---> position {}".format( el[1]))
 
 
 def GetStudyCategory(ds_list):
@@ -14,7 +48,7 @@ def GetStudyCategory(ds_list):
             studies[ds.StudyInstanceUID].append(ds);
         else:
             studies[ds.StudyInstanceUID] = [ds];
-    return studies
+    return studies.items()
 
 
 def GetSeriesCategory(ds_list):
@@ -24,70 +58,152 @@ def GetSeriesCategory(ds_list):
             series[ds.SeriesInstanceUID].append(ds);
         else:
             series[ds.SeriesInstanceUID] = [ds];
-    return series
-def GetSOPCategory(ds_list):
-    series = {}
+    return series.items()
+
+
+def GetSpacingCategory(ds_list):
+    series = []
     for ds in ds_list:
-        if (ds.SOPInstanceUID in series):
-            series[ds.SOPInstanceUID].append(ds);
+        spacing = [ds.PixelSpacing[0], ds.PixelSpacing[1], ds.SliceThickness]
+        if len(series) == 0:
+            series.append((spacing, [ds]))
         else:
-            series[ds.SOPInstanceUID] = [ds];
+            found_match = False
+            for s in series:
+                if GetVectorDistance(s[0], ds.PixelSpacing) < floating_point_tolerance:
+                    found_match = True
+                    s[1].append(ds)
+                    break
+            if not found_match:
+                series.append((spacing, [ds]))
     return series
+
+
+def GetOrientationCategory(ds_list):
+    series = []
+
+    for ds in ds_list:
+        orientation = ds.ImageOrientationPatient
+        if len(series) == 0:
+            series.append((orientation, [ds]))
+        else:
+            found_match = False
+            for s in series:
+                if GetVectorDistance(s[0], ds.ImageOrientationPatient) < floating_point_tolerance:
+                    found_match = True
+                    s[1].append(ds)
+                    break
+            if not found_match:
+                series.append(orientation, [ds])
+    return series
+
+
+def GetVectorDistance(vec1, vec2):
+    dist = 0
+    for e1, e2 in zip(vec1, vec2):
+        d = e1 - e2
+        dist += d ** 2
+    return numpy.sqrt(dist)
+
+
+def GetImagePosition(ds):
+    dirr = ds.ImageOrientationPatient
+
+    poss = ds.ImagePositionPatient
+    a = numpy.array(dirr[:3])
+    b = numpy.array(dirr[3:])
+    c = numpy.cross(a, b)
+    output = float(c.dot(numpy.array(poss)))
+    return output
+
+
+def ClassifySeriesByPosition(ds_list):
+    sorted_ds = []
+    ds_pairs = []
+    counter = 0
+
+    for ds_element in ds_list:
+        ds_pairs.append((ds_element, GetImagePosition(ds_element)))
+    if len(ds_list) == 1:
+        return [PositionBaseCategoryElement(1, ds_pairs[0])]
+
+    for sorted_key in sorted(ds_pairs, key=lambda x: x[1]):
+        sorted_ds.append(sorted_key)
+
+    category = [PositionBaseCategoryElement( sorted_ds[1][1]-sorted_ds[0][1],sorted_ds[0])]
+    for (ds, idx) in zip(sorted_ds[1:], range(1, len(sorted_ds))):
+        if not category[-1].AddNewCandidate(ds):
+            if idx == len(sorted_ds) - 1:
+                category.append(PositionBaseCategoryElement(1, ds))
+            else:
+                category.append(PositionBaseCategoryElement(sorted_ds[idx+1][1]-ds[1],ds))
+    for el in category:
+        el.Print()
+    return category
+
 
 def HighDicomMultiFrameConvertor(SingleFrameDir, OutputPrefix):
     ModalityCategory = {}
     Files = os.listdir(SingleFrameDir)
     for f in Files:
         try:
-          ds = dcmread(os.path.join(SingleFrameDir, f));
+            ds = dcmread(os.path.join(SingleFrameDir, f));
         except InvalidDicomError:
-          continue
+            continue
         if ds.Modality in ModalityCategory:
             ModalityCategory[ds.Modality].append(ds);
         else:
             ModalityCategory[ds.Modality] = [ds];
     n = 0
+    Output=[]
     success = True
     for ModalityName, ModalityDatasets in ModalityCategory.items():
         if ModalityName != 'CT' and ModalityName != 'MR' and ModalityName != 'PET':
             continue
         Modality_Studies = GetStudyCategory(ModalityDatasets)
-        Modality_Studies_Items = Modality_Studies.items()
-        for stdy_UID, stdy_ds in Modality_Studies_Items:
+        for stdy_UID, stdy_ds in Modality_Studies:
             Modality_Series = GetSeriesCategory(stdy_ds)
-            Modality_Series_Items = GetSeriesCategory(stdy_ds).items()
-            for sris_UID, sris_ds in Modality_Series_Items:
-                ModalityConvertorClass = getattr(sop, "LegacyConvertedEnhanced" + ModalityName + "Image")
-                sops=GetSOPCategory(sris_ds)
-                sorted_ds=[]
-                for sorted_key in sorted(sops.items(),key=lambda x: x[1][0].InstanceNumber):
-                    sorted_ds.append(sorted_key[1][0])
-                    print("{}---->{}".format(sorted_key[0],sorted_key[1][0].InstanceNumber))
-                    print("AccessionNumb---->{}".format( sorted_key[1][0].AccessionNumber))
+            for sris_UID, sris_ds in Modality_Series:
+                spacing_categories = GetSpacingCategory(sris_ds)
+                for spacing_element in spacing_categories:
+                    orientation_categories = GetOrientationCategory(spacing_element[1])
+                    for orientation_element in orientation_categories:
+                        equally_positioned_classes = ClassifySeriesByPosition(orientation_element[1])
+                        for uniform_class in equally_positioned_classes:
+                            final_ds = []
+                            for dds in uniform_class.DicomDataset:
+                                final_ds.append(dds[0])
+                            ModalityConvertorClass = getattr(sop, "LegacyConvertedEnhanced" + ModalityName + "Image")
 
-                try:
-                    ModalityConvertorObj = ModalityConvertorClass(legacy_datasets=sorted_ds,
-                                                                  series_instance_uid=sris_UID,
-                                                                  series_number=sorted_ds[0].SeriesNumber,
-                                                                  sop_instance_uid=sorted_ds[0].SOPInstanceUID,
-                                                                  instance_number=sorted_ds[0].InstanceNumber)
-                    id = "_%02d_.dcm" % n
-                    FileName = os.path.join(OutputPrefix, ModalityName+id)
-                    folder = os.path.dirname(FileName)
-                    if not os.path.exists(folder):
-                        os.makedirs(folder)
+                            try:
 
-                    dcmwrite(filename=FileName,
-                             dataset=ModalityConvertorObj, write_like_original=True)
-                    print("File " + id + " was successfully written ...")
-                except:
-                    print(" sth went wrong ...")
-                    success = False
-                    pass
-    return success
+                                ModalityConvertorObj = ModalityConvertorClass(legacy_datasets=final_ds,
+                                                                              series_instance_uid=generate_uid(),
+                                                                              series_number=final_ds[0].SeriesNumber,
+                                                                              sop_instance_uid=generate_uid(),
+                                                                              instance_number=final_ds[0].InstanceNumber)
+                                id = "_%02d_.dcm" % n
+                                FileName = os.path.join(OutputPrefix, ModalityName + id)
+                                folder = os.path.dirname(FileName)
+                                if not os.path.exists(folder):
+                                    os.makedirs(folder)
+
+                                dcmwrite(filename=FileName,
+                                         dataset=ModalityConvertorObj, write_like_original=True)
+                                print("File " + FileName + " was successfully written ...")
+                                n =+1
+                            except:
+                                print(" sth went wrong ...")
+                                success = False
+                                pass
+                            Output.append(success)
+
+    return Output
+
 
 def main(argv):
-    parser = argparse.ArgumentParser(description="highdicom MF conversion wrapper. Specify input directory (-i) and output directory (-o).")
+    parser = argparse.ArgumentParser(
+        description="highdicom MF conversion wrapper. Specify input directory (-i) and output directory (-o).")
     parser.add_argument("-i", "--input-folder", dest="input_folder", metavar="PATH",
                         default="-", required=True, help="Folder of input DICOM files (can contain sub-folders)")
     parser.add_argument("-o", "--output-prefix", dest="output_prefix", metavar="PATH",
@@ -96,5 +212,6 @@ def main(argv):
 
     HighDicomMultiFrameConvertor(args.input_folder, args.output_prefix)
 
+
 if __name__ == "__main__":
-  main(sys.argv[1:])
+    main(sys.argv[1:])

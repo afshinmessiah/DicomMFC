@@ -196,7 +196,7 @@ for folder_name in folders:
                 os.remove(final_file_name)
             os.rename(full_f, final_file_name)
 
-            vr = run_exe([dcm_verify, '-v', final_file_name], final_file_base + "_ver_error.txt"
+            vr = run_exe([dcm_verify, ' ', final_file_name], final_file_base + "_ver_error.txt"
                          , final_file_base + "_ver_output.txt")
             if vr == 0:
                 info.PixelMedVerification += "1"
@@ -228,7 +228,7 @@ for folder_name in folders:
     info.HighDicomSuccess = hd_success
     for hd_dcm_file in hd_dcm_files:
         hd_out_file_base = os.path.basename(hd_dcm_file)
-        vr = run_exe([dcm_verify, '-v', os.path.join(highdicom_output_folder, hd_dcm_file)]
+        vr = run_exe([dcm_verify, ' ', os.path.join(highdicom_output_folder, hd_dcm_file)]
                      , os.path.join(highdicom_output_folder, hd_out_file_base + "_ver_error.txt")
                      , os.path.join(highdicom_output_folder, hd_out_file_base + "_ver_output.txt"))
         if vr == 0:
