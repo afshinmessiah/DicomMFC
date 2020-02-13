@@ -7,38 +7,9 @@ import subprocess
 import stat
 import xlsxwriter
 from HighDcm import HighDicomMultiFrameConvertor
-from pydicom.filereader import dcmread
-from highdicom.legacy import sop
-
-
-def recursive_file_find(address, approvedlist):
-    filelist = os.listdir(address)
-    for filename in filelist:
-        fullpath = os.path.join(address, filename);
-
-        if os.path.isdir(fullpath):
-            recursive_file_find(fullpath, approvedlist)
-            continue;
-        filename_size = len(filename);
-        if filename.find(".dcm", filename_size - 5) != -1:
-            approvedlist.append(fullpath)
-
-
-# ----------------------------------------------------------------------------------
-def recursive_folder_find(address, approvedlist):
-    filelist = os.listdir(address)
-    has_dicom = bool(0)
-    for file_name in filelist:
-        fullpath = os.path.join(address, file_name)
-        if os.path.isdir(fullpath):
-            recursive_folder_find(fullpath, approvedlist)
-            continue;
-        filename_size = len(file_name)
-        if file_name.find(".dcm", filename_size - 5) != -1:
-            has_dicom = 1
-            break;
-    if has_dicom:
-        approvedlist.append(address)
+import MFC_Common
+import itkImageVerification
+import dcm2niix
 
 
 # -----------------------------------------------------------------------------------------
@@ -69,64 +40,62 @@ class OutInfo:
         self.HighDicomSuccess = False;
 
     Input = InfoPiece()
+    InputVerification = ""
     PixelMedOutput = InfoPiece()
     PixelMedSuccess = False
     PixelMedVerification = ""
-    HighDicomOutput = InfoPiece();
+    HighDicomOutput = InfoPiece()
     HighDicomSuccess = False;
     HighDicomVerification = ""
-
-
 # ---------------------------------------------------------------------
-def write_report(seq_, excel_file):
-    Fields = {'Input Folder': 0, 'Input File Count': 1,
-              'PM Output Folder': 2, 'PM Output File Count': 3,
-              'PM Success': 4, 'PM Verification': 5, 'HD Output Folder': 6, 'HD Output File Count': 7,
-              'HD Success': 8, 'HD Verification': 9}
+def write_niix_report(seq_, excel_file):
+
 
     workbook = xlsxwriter.Workbook(excel_file)
     worksheet = workbook.add_worksheet()
     obj = seq_[0]
     col = 0
-    for key, value in Fields.items():
-        worksheet.write_string(0, value, key)
-    for r in range(1, len(seq_) + 1):
-        obj = seq_[r - 1]
-        worksheet.write_string(r, Fields['Input Folder'], str(obj.Input.Dir))
-        worksheet.write_number(r, Fields['Input File Count'], obj.Input.FileCount)
-        worksheet.write_string(r, Fields['PM Output Folder'], str(obj.PixelMedOutput.Dir))
-        worksheet.write_number(r, Fields['PM Output File Count'], obj.PixelMedOutput.FileCount)
-        worksheet.write_boolean(r, Fields['PM Success'], obj.PixelMedSuccess)
-        worksheet.write_string(r, Fields['PM Verification'], obj.PixelMedVerification)
-        worksheet.write_string(r, Fields['HD Output Folder'], str(obj.HighDicomOutput.Dir))
-        worksheet.write_number(r, Fields['HD Output File Count'], obj.HighDicomOutput.FileCount)
-        worksheet.write_boolean(r, Fields['HD Success'], obj.HighDicomSuccess)
-        worksheet.write_string(r, Fields['HD Verification'], obj.HighDicomVerification)
+    worksheet.write_string(0, 0, 'Input File1')
+    worksheet.write_string(0, 1, 'Input File2')
+    worksheet.write_string(0, 2, 'err message')
+    for (data, r) in zip(seq_, range(1,len(seq_)+1)):
+        worksheet.write_string(r, 0, data[0])
+        worksheet.write_string(r, 1, data[1])
+        worksheet.write_string(r, 2, data[2])
+
 
     workbook.close()
 
 
-# =========================================================================
-def writ_str_to_text(file_name, content):
-    text_file = open(file_name, "w")
-    n = text_file.write(content)
-    text_file.close()
+# ---------------------------------------------------------------------
+def write_report(seq_, excel_file):
+    Fields = ('Input Folder', 'Input File Count', 'Input Verification',
+              'PM Output Folder', 'PM Output File Count',
+              'PM Success', 'PM Verification', 'HD Output Folder', 'HD Output File Count',
+              'HD Success', 'HD Verification')
 
-    # =========================================================================
+    workbook = xlsxwriter.Workbook(excel_file)
+    worksheet = workbook.add_worksheet()
+    obj = seq_[0]
+    col = 0
+    for value, idx in zip(Fields, range(0, len(Fields))):
+        worksheet.write_string(0, idx, value)
+    for r in range(1, len(seq_) + 1):
+        obj = seq_[r - 1]
+        worksheet.write_string(r, Fields.index('Input Folder'), str(obj.Input.Dir))
+        worksheet.write_number(r, Fields.index('Input File Count'), obj.Input.FileCount)
+        worksheet.write_string(r, Fields.index('Input Verification'), obj.InputVerification)
+        worksheet.write_string(r, Fields.index('PM Output Folder'), str(obj.PixelMedOutput.Dir))
+        worksheet.write_number(r, Fields.index('PM Output File Count'), obj.PixelMedOutput.FileCount)
+        worksheet.write_boolean(r, Fields.index('PM Success'), obj.PixelMedSuccess)
+        worksheet.write_string(r, Fields.index('PM Verification'), obj.PixelMedVerification)
+        worksheet.write_string(r, Fields.index('HD Output Folder'), str(obj.HighDicomOutput.Dir))
+        worksheet.write_number(r, Fields.index('HD Output File Count'), obj.HighDicomOutput.FileCount)
+        worksheet.write_boolean(r, Fields.index('HD Success'), obj.HighDicomSuccess)
+        worksheet.write_string(r, Fields.index('HD Verification'), obj.HighDicomVerification)
 
+    workbook.close()
 
-def run_exe(arg_list, stderr_file, stdout_file):
-    print(str(arg_list))
-    proc = subprocess.Popen(arg_list, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    # proc.wait(timeout=3600)
-    _error = proc.stderr.read();
-    writ_str_to_text(stderr_file, _error.decode("ascii"))
-    _output = proc.stdout.read();
-    writ_str_to_text(stdout_file, _output.decode("ascii"))
-    return proc.returncode
-
-
-# -------------------------------------------------------------------------------------
 
 files = []
 # recursive_file_findr(start_dir,files)
@@ -141,13 +110,15 @@ pixelmed_exe = "E:\\work\\pixelmedjavadicom_binaryrelease.20191218"
 pixelmed_lib = "E:\\work\\pixelmedjavadicom_dependencyrelease.20191218\\lib"
 dcm_verify = "D:\\ThirdParty\\dicom3tools\\dicom3tools_winexe_1.00.snapshot.20191225060430\\dciodvfy.exe"
 Excel_report = os.path.join(save_dir, "Report.xlsx")
+niix_excel_file = os.path.join(save_dir, "NiixReport.xlsx")
 # p=Path(save_dir)
 # p.unlink()
 if os.path.exists(save_dir):
     shutil.rmtree(save_dir, onerror=on_rm_error)
 folders = []
-recursive_folder_find(start_dir, folders)
+MFC_Common.recursive_folder_find(start_dir, folders)
 OutputReport = []
+niix_ver_errs=[]
 for folder_name in folders:
     print(folder_name)
     info = OutInfo()
@@ -172,8 +143,20 @@ for folder_name in folders:
     files = os.listdir(folder_name)
     info.Input.Dir = folder_name
     info.Input.FileCount = len(files)
+    input_check_folder = (folder_name.replace(start_dir, os.path.join(save_dir, "inputcheck")))
+    if not os.path.exists(input_check_folder):
+        os.makedirs(input_check_folder)
+    for file in files:
+        infilepath = os.path.join(folder_name, file)
+        vr = MFC_Common.run_exe([dcm_verify, '-filename', infilepath]
+                                , os.path.join(input_check_folder, file + "_ver_error.txt")
+                                , os.path.join(input_check_folder, file + "_ver_output.txt"))
+        if vr == 0:
+            info.InputVerification += '1'
+        else:
+            info.InputVerification += '0'
 
-    exit_code = run_exe(command, output_error_file, output_stream_file)
+    exit_code = MFC_Common.run_exe(command, output_error_file, output_stream_file)
     if exit_code == 0:
         info.PixelMedSuccess = True;
     else:
@@ -196,8 +179,8 @@ for folder_name in folders:
                 os.remove(final_file_name)
             os.rename(full_f, final_file_name)
 
-            vr = run_exe([dcm_verify, ' ', final_file_name], final_file_base + "_ver_error.txt"
-                         , final_file_base + "_ver_output.txt")
+            vr = MFC_Common.run_exe([dcm_verify, '-filename', final_file_name], final_file_base + "_ver_error.txt"
+                                    , final_file_base + "_ver_output.txt")
             if vr == 0:
                 info.PixelMedVerification += "1"
             else:
@@ -211,7 +194,7 @@ for folder_name in folders:
             print("Something went wrong ... try again")
             time.sleep(5)
         else:
-            break;
+            break
     # ---------------------------------------------------------
     highdicom_output_folder = (folder_name.replace(start_dir, os.path.join(save_dir, "HighDcm")))
     highdicom_output_folder_parent = Path(highdicom_output_folder).parent
@@ -220,7 +203,7 @@ for folder_name in folders:
     hd_success = HighDicomMultiFrameConvertor(folder_name, highdicom_output_folder)
     info.HighDicomOutput.Dir = highdicom_output_folder;
     hd_out_files = os.listdir(highdicom_output_folder)
-    hd_dcm_files=[]
+    hd_dcm_files = []
     for ffiles in hd_out_files:
         if ffiles.endswith(".dcm"):
             hd_dcm_files.append(ffiles)
@@ -228,9 +211,9 @@ for folder_name in folders:
     info.HighDicomSuccess = hd_success
     for hd_dcm_file in hd_dcm_files:
         hd_out_file_base = os.path.basename(hd_dcm_file)
-        vr = run_exe([dcm_verify, ' ', os.path.join(highdicom_output_folder, hd_dcm_file)]
-                     , os.path.join(highdicom_output_folder, hd_out_file_base + "_ver_error.txt")
-                     , os.path.join(highdicom_output_folder, hd_out_file_base + "_ver_output.txt"))
+        vr = MFC_Common.run_exe([dcm_verify, '-filename', os.path.join(highdicom_output_folder, hd_dcm_file)]
+                                , os.path.join(highdicom_output_folder, hd_out_file_base + "_ver_error.txt")
+                                , os.path.join(highdicom_output_folder, hd_out_file_base + "_ver_output.txt"))
         if vr == 0:
             info.HighDicomVerification += '1'
         else:
@@ -238,3 +221,20 @@ for folder_name in folders:
 
     OutputReport.append(info)
     write_report(OutputReport, Excel_report)
+    # ------------------------------------------------------------------------------------
+
+    exe_path = "E:\\work\\dcm2niix\\bin\\bin\\dcm2niix.exe"
+    input_files = os.listdir(folder_name)
+    niix_output_folder = (folder_name.replace(start_dir, os.path.join(save_dir, "niix")))
+    if not os.path.exists(niix_output_folder):
+        os.makedirs(niix_output_folder)
+    for file in input_files:
+        input_file = os.path.join(folder_name, file)
+        dcm2niix.dcm2niixSingleFile(exe_path, input_file, niix_output_folder)
+        niix_output_file = os.path.join(niix_output_folder, file + ".nii.gz")
+        err = itkImageVerification.compareImages(input_file, niix_output_file)
+
+        if len(err) > 0:
+            niix_ver_errs.append((input_file, niix_output_file, err))
+    write_niix_report(niix_ver_errs, niix_excel_file)
+

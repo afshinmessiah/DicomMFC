@@ -1,5 +1,5 @@
 import os, sys, argparse
-import numpy
+import MFC_Common, numpy
 from pydicom.uid import generate_uid
 from pydicom.filereader import dcmread
 from pydicom.filewriter import dcmwrite
@@ -72,7 +72,7 @@ def GetSpacingCategory(ds_list):
         else:
             found_match = False
             for s in series:
-                if GetVectorDistance(s[0], ds.PixelSpacing) < floating_point_tolerance:
+                if MFC_Common.GetVectorDistance(s[0], ds.PixelSpacing) < floating_point_tolerance:
                     found_match = True
                     s[1].append(ds)
                     break
@@ -91,7 +91,7 @@ def GetOrientationCategory(ds_list):
         else:
             found_match = False
             for s in series:
-                if GetVectorDistance(s[0], ds.ImageOrientationPatient) < floating_point_tolerance:
+                if MFC_Common.GetVectorDistance(s[0], ds.ImageOrientationPatient) < floating_point_tolerance:
                     found_match = True
                     s[1].append(ds)
                     break
@@ -99,13 +99,6 @@ def GetOrientationCategory(ds_list):
                 series.append(orientation, [ds])
     return series
 
-
-def GetVectorDistance(vec1, vec2):
-    dist = 0
-    for e1, e2 in zip(vec1, vec2):
-        d = e1 - e2
-        dist += d ** 2
-    return numpy.sqrt(dist)
 
 
 def GetSlicePosition(ds):
